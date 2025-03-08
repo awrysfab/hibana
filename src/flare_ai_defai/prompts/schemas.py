@@ -26,14 +26,14 @@ class SemanticRouterResponse(str, Enum):
     or response type that the system can handle.
 
     Attributes:
-        GENERATE_ACCOUNT: Route to account generation workflow
+        CONNECT_WALLET: Route to wallet connection workflow
         SEND_TOKEN: Route to token sending workflow
         SWAP_TOKEN: Route to token swapping workflow
         REQUEST_ATTESTATION: Route to attestation request handling
         CONVERSATIONAL: Route to general conversational response
     """
 
-    GENERATE_ACCOUNT = "GenerateAccount"
+    CONNECT_WALLET = "ConnectWallet"
     SEND_TOKEN = "SendToken"
     SWAP_TOKEN = "SwapToken"
     REQUEST_ATTESTATION = "RequestAttestation"
@@ -42,31 +42,45 @@ class SemanticRouterResponse(str, Enum):
 
 class TokenSendResponse(TypedDict):
     """
-    Type definition for token sending operation parameters.
+    Type definition for token send operation parameters.
 
-    Defines the required fields for a token send operation, providing
-    type safety for the destination address and amount to be sent.
+    This type defines the expected structure for token sending operations,
+    including the recipient address and amount to send.
 
     Attributes:
-        to_address (str): The destination wallet address
-        amount (float): The amount of tokens to send
+        to_address (str): Recipient address for the token transfer
+        amount (float): Amount of tokens to send
     """
 
     to_address: str
     amount: float
 
 
-class TokenSwapResponse(TypedDict):
+class WalletConnectResponse(TypedDict):
     """
-    Type definition for token swapping operation parameters.
+    Type definition for wallet connection parameters.
 
-    Defines the required fields for a token swap operation, including
-    the tokens involved and the amount to be swapped.
+    This type defines the expected structure for wallet connection operations,
+    including the wallet address to connect to.
 
     Attributes:
-        from_token (str): The token to swap from
-        to_token (str): The token to swap to
-        amount (float): The amount of from_token to swap
+        wallet_address (str): Wallet address to connect to
+    """
+
+    wallet_address: str
+
+
+class TokenSwapResponse(TypedDict):
+    """
+    Type definition for token swap operation parameters.
+
+    This type defines the expected structure for token swapping operations,
+    including source token, target token, and amount to swap.
+
+    Attributes:
+        from_token (str): Source token symbol
+        to_token (str): Target token symbol
+        amount (float): Amount of source tokens to swap
     """
 
     from_token: str

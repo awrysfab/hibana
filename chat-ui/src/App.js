@@ -2,13 +2,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import './index.css';
+import { WalletProvider } from './contexts/WalletContext';
+import WalletConnector from './components/WalletConnector';
+import { useWallet } from './contexts/WalletContext';
 
-const BACKEND_ROUTE = 'api/routes/chat/'
+const BACKEND_ROUTE = 'http://localhost:8080/api/routes/chat/'
 
 const ChatInterface = () => {
   const [messages, setMessages] = useState([
     { 
-      text: "Hi, I'm Artemis! 👋 I'm your Copilot for Flare, ready to help you with operations like generating wallets, sending tokens, and executing token swaps. \n\n⚠️ While I aim to be accurate, never risk funds you can't afford to lose.",
+      text: "Hi, I'm Artemis! 👋 I'm your Copilot for Flare, ready to help you with operations like connecting your wallet, sending tokens, and executing token swaps. \n\n⚠️ While I aim to be accurate, never risk funds you can't afford to lose.",
       type: 'bot' 
     }
   ]);
@@ -17,6 +20,7 @@ const ChatInterface = () => {
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState(null);
   const messagesEndRef = useRef(null);
+  const { account } = useWallet();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -26,14 +30,36 @@ const ChatInterface = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Effect to notify when wallet is connected
+  useEffect(() => {
+    if (account) {
+      setMessages(prev => [
+        ...prev, 
+        { 
+          text: `Your wallet has been connected successfully! Your address is: ${account}`, 
+          type: 'bot' 
+        }
+      ]);
+    }
+  }, [account]);
+
   const handleSendMessage = async (text) => {
     try {
+      // If wallet is connected, include the address in the request
+      const requestBody = {
+        message: text
+      };
+      
+      if (account) {
+        requestBody.wallet_address = account;
+      }
+      
       const response = await fetch(BACKEND_ROUTE, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify(requestBody),
       });
       
       if (!response.ok) {
@@ -46,6 +72,46 @@ const ChatInterface = () => {
       if (data.response.includes('Transaction Preview:')) {
         setAwaitingConfirmation(true);
         setPendingTransaction(text);
+      }
+      
+      // Check if response contains transaction data for wallet extension
+      if (data.response.includes('tx_data:')) {
+        try {
+          // Parse the transaction data with the new format
+          // Format: tx_data:toAddress:valueHex:valueWei
+          const txDataMatch = data.response.match(/tx_data:(0x[a-fA-F0-9]+):(0x[a-fA-F0-9]+):(\d+)/);
+          
+          if (txDataMatch && window.ethereum && account) {
+            const toAddress = txDataMatch[1];
+            const valueHex = txDataMatch[2]; // Use hex value for precision
+            
+            console.log('Transaction data:', {
+              from: account,
+              to: toAddress,
+              value: valueHex
+            });
+            
+            // Send transaction using wallet extension
+            const transactionParameters = {
+              from: account,
+              to: toAddress,
+              value: valueHex, // Use hex value for better precision
+              gas: '0x5208', // 21000 in hex
+            };
+            
+            // Send the transaction using the wallet extension
+            const txHash = await window.ethereum.request({
+              method: 'eth_sendTransaction',
+              params: [transactionParameters],
+            });
+            
+            // Return a modified response with the transaction hash
+            return `Transaction sent successfully! Transaction hash: ${txHash}`;
+          }
+        } catch (walletError) {
+          console.error('Wallet transaction error:', walletError);
+          return `Error sending transaction: ${walletError.message}`;
+        }
       }
       
       return data.response;
@@ -68,6 +134,32 @@ const ChatInterface = () => {
     if (awaitingConfirmation) {
       if (messageText.toUpperCase() === 'CONFIRM') {
         setAwaitingConfirmation(false);
+        
+        // Check if wallet is connected
+        if (!account && window.ethereum) {
+          // If wallet is not connected but available, prompt to connect
+          try {
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            if (accounts.length > 0) {
+              // Wait for the account state to update
+              setTimeout(async () => {
+                const response = await handleSendMessage(pendingTransaction);
+                setMessages(prev => [...prev, { text: response, type: 'bot' }]);
+                setIsLoading(false);
+              }, 1000);
+              return;
+            }
+          } catch (error) {
+            console.error('Error connecting wallet:', error);
+            setMessages(prev => [...prev, { 
+              text: 'Failed to connect wallet. Please connect your wallet and try again.', 
+              type: 'bot' 
+            }]);
+            setIsLoading(false);
+            return;
+          }
+        }
+        
         const response = await handleSendMessage(pendingTransaction);
         setMessages(prev => [...prev, { text: response, type: 'bot' }]);
       } else {
@@ -108,9 +200,12 @@ const ChatInterface = () => {
     <div className="flex flex-col h-screen bg-gray-100">
       <div className="flex flex-col h-full max-w-4xl mx-auto w-full shadow-lg bg-white">
         {/* Header */}
-        <div className="bg-pink-600 text-white p-4">
-          <h1 className="text-xl font-bold">Artemis</h1>
-          <p className="text-sm opacity-80">DeFAI Copilot for Flare (gemini-2.0-flash)</p>
+        <div className="bg-pink-600 text-white p-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold">Artemis</h1>
+            <p className="text-sm opacity-80">DeFAI Copilot for Flare (gemini-2.0-flash)</p>
+          </div>
+          <WalletConnector />
         </div>
 
         {/* Messages container */}
@@ -188,4 +283,12 @@ const ChatInterface = () => {
   );
 };
 
-export default ChatInterface;
+const App = () => {
+  return (
+    <WalletProvider>
+      <ChatInterface />
+    </WalletProvider>
+  );
+};
+
+export default App;

@@ -4,10 +4,10 @@ SEMANTIC_ROUTER: Final = """
 Classify the following user input into EXACTLY ONE category. Analyze carefully and choose the most specific matching category.
 
 Categories (in order of precedence):
-1. GENERATE_ACCOUNT
-   • Keywords: create wallet, new account, generate address, make wallet
-   • Must express intent to create/generate new account/wallet
-   • Ignore if just asking about existing accounts
+1. CONNECT_WALLET
+   • Keywords: connect wallet, link wallet, use wallet, wallet extension
+   • Must express intent to connect/link an existing wallet or use a wallet extension
+   • Ignore if just asking about wallets in general
 
 2. SEND_TOKEN
    • Keywords: send, transfer, pay, give tokens
@@ -37,6 +37,56 @@ Instructions:
 - Default to CONVERSATIONAL if unclear
 - Ignore politeness phrases or extra context
 - Focus on core intent of request
+"""
+
+CONNECT_WALLET: Final = """
+Extract a wallet address from the user input if present. If no wallet address is found, respond with an empty wallet_address.
+
+User Input: ${user_input}
+
+Instructions:
+- Look for an Ethereum-style wallet address (0x followed by 40 hexadecimal characters)
+- Return the wallet address if found
+- Return an empty string if no valid wallet address is found
+- Format the response as a JSON object with a single key "wallet_address"
+
+Example Response:
+{"wallet_address": "0x1234567890abcdef1234567890abcdef12345678"}
+or
+{"wallet_address": ""}
+"""
+
+WALLET_CONNECTED: Final = """
+Generate a friendly response confirming that the wallet has been connected successfully.
+
+Connected Wallet Address: ${address}
+
+Instructions:
+- Confirm the wallet has been connected successfully
+- Include the wallet address in the response
+- Mention that the user can now send and swap tokens
+- Keep the response concise and friendly
+"""
+
+WALLET_CONNECTION_INSTRUCTIONS: Final = """
+Generate instructions for connecting a wallet to the DeFi application.
+
+Instructions:
+- Explain that the user needs to connect a wallet to use the DeFi features
+- Mention common wallet extensions like MetaMask, Trust Wallet, or Coinbase Wallet
+- Provide step-by-step instructions for connecting a wallet
+- Explain that the user should share their wallet address once connected
+- Keep the instructions clear and concise
+"""
+
+WALLET_REQUIRED: Final = """
+Generate a friendly message explaining that a wallet connection is required before performing token operations.
+
+Instructions:
+- Explain that a wallet connection is required to send or swap tokens
+- Provide brief instructions on how to connect a wallet
+- Keep the message friendly and helpful
+- Suggest using the phrase "connect wallet" to initiate the connection process
 """
 
 GENERATE_ACCOUNT: Final = """
@@ -201,29 +251,14 @@ A user wants to perform a remote attestation with the TEE, make the following pr
 
 
 TX_CONFIRMATION: Final = """
-Respond with a confirmation message for the successful transaction that:
+Generate a friendly response confirming a transaction has been processed.
 
-1. Required elements:
-   - Express positive acknowledgement of the successful transaction
-   - Include the EXACT transaction hash link with NO modifications:
-     [See transaction on Explorer](${block_explorer}/tx/${tx_hash})
-   - Place the link on its own line for visibility
+Transaction Information: ${tx_hash}
+Block Explorer URL: ${block_explorer}
 
-2. Message structure:
-   - Start with a clear success confirmation
-   - Include transaction link in unmodified format
-   - End with a brief positive closing statement
-
-3. Link requirements:
-   - Preserve all variables: ${block_explorer} and ${tx_hash}
-   - Maintain exact markdown link syntax
-   - Keep URL structure intact
-   - No additional formatting or modification of the link
-
-Sample format:
-Great news! Your transaction has been successfully confirmed. 🎉
-
-[See transaction on Explorer](${block_explorer}/tx/${tx_hash})
-
-Your transaction is now securely recorded on the blockchain.
+Instructions:
+- If the transaction information starts with "tx_data:", explain that the transaction data has been prepared and will be sent to the wallet extension for signing
+- If the transaction information starts with "0x", confirm the transaction has been sent successfully and include the transaction hash
+- Provide a link to view the transaction on the block explorer if a transaction hash is available
+- Keep the response concise and friendly
 """

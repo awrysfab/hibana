@@ -2,15 +2,26 @@
 Flare Network Provider Module
 
 This module provides a FlareProvider class for interacting with the Flare Network.
-It handles account management, transaction queuing, and blockchain interactions.
+It handles wallet connection, transaction queuing, and blockchain interactions.
 """
 
 from dataclasses import dataclass
 
 import structlog
-from eth_account import Account
 from eth_typing import ChecksumAddress
 from web3 import Web3
+
+# Fix import for geth_poa_middleware
+try:
+    # For newer web3.py versions
+    from web3.middleware.geth import geth_poa_middleware
+except ImportError:
+    # For older web3.py versions
+    try:
+        from web3.middleware import geth_poa_middleware
+    except ImportError:
+        # Fallback if middleware is not available
+        geth_poa_middleware = None
 from web3.types import TxParams
 
 
@@ -33,12 +44,11 @@ logger = structlog.get_logger(__name__)
 
 class FlareProvider:
     """
-    Manages interactions with the Flare Network including account
+    Manages interactions with the Flare Network including wallet
     operations and transactions.
 
     Attributes:
-        address (ChecksumAddress | None): The account's checksum address
-        private_key (str | None): The account's private key
+        address (ChecksumAddress | None): The connected wallet's checksum address
         tx_queue (list[TxQueueElement]): Queue of pending transactions
         w3 (Web3): Web3 instance for blockchain interactions
         logger (BoundLogger): Structured logger for the provider
@@ -52,17 +62,20 @@ class FlareProvider:
             web3_provider_url (str): URL of the Web3 provider endpoint
         """
         self.address: ChecksumAddress | None = None
-        self.private_key: str | None = None
         self.tx_queue: list[TxQueueElement] = []
         self.w3 = Web3(Web3.HTTPProvider(web3_provider_url))
+
+        # Add POA middleware for Flare network if available
+        if geth_poa_middleware:
+            self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
         self.logger = logger.bind(router="flare_provider")
 
     def reset(self) -> None:
         """
-        Reset the provider state by clearing account details and transaction queue.
+        Reset the provider state by clearing wallet connection and transaction queue.
         """
         self.address = None
-        self.private_key = None
         self.tx_queue = []
         self.logger.debug("reset", address=self.address, tx_queue=self.tx_queue)
 
@@ -82,71 +95,63 @@ class FlareProvider:
         """
         Send the most recent transaction in the queue.
 
+        For wallet extensions, this method returns the transaction data that should be
+        sent to the wallet extension for signing and sending.
+
         Returns:
-            str: Transaction hash of the sent transaction
+            str: Transaction hash or transaction data for wallet extension
 
         Raises:
             ValueError: If no transaction is found in the queue
         """
         if self.tx_queue:
-            tx_hash = self.sign_and_send_transaction(self.tx_queue[-1].tx)
-            self.logger.debug("sent_tx_hash", tx_hash=tx_hash)
+            tx_data = self.tx_queue[-1].tx
+
+            # For wallet extensions, we need to return the transaction data
+            # The actual transaction will be signed and sent by the wallet extension
+            # in the frontend
+
+            # Format transaction for display - include hex value to preserve precision
+            to_address = tx_data["to"]
+            value_wei = tx_data["value"]
+            value_hex = hex(value_wei)
+
+            tx_hash = f"tx_data:{to_address}:{value_hex}:{value_wei}"
+            self.logger.debug("prepared_tx_data", tx_data=tx_data)
+
+            # Remove the transaction from the queue
             self.tx_queue.pop()
+
             return tx_hash
         msg = "Unable to find confirmed tx"
         raise ValueError(msg)
 
-    def generate_account(self) -> ChecksumAddress:
+    def connect_wallet(self, wallet_address: str) -> ChecksumAddress:
         """
-        Generate a new Flare account.
-
-        Returns:
-            ChecksumAddress: The checksum address of the generated account
-        """
-        account = Account.create()
-        self.private_key = account.key.hex()
-        self.address = self.w3.to_checksum_address(account.address)
-        self.logger.debug(
-            "generate_account", address=self.address, private_key=self.private_key
-        )
-        return self.address
-
-    def sign_and_send_transaction(self, tx: TxParams) -> str:
-        """
-        Sign and send a transaction to the network.
+        Connect to a wallet using its address.
 
         Args:
-            tx (TxParams): Transaction parameters to be sent
+            wallet_address (str): The wallet address to connect to
 
         Returns:
-            str: Transaction hash of the sent transaction
-
-        Raises:
-            ValueError: If account is not initialized
+            ChecksumAddress: The checksum address of the connected wallet
         """
-        if not self.private_key or not self.address:
-            msg = "Account not initialized"
-            raise ValueError(msg)
-        signed_tx = self.w3.eth.account.sign_transaction(
-            tx, private_key=self.private_key
-        )
-        tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-        self.w3.eth.wait_for_transaction_receipt(tx_hash)
-        self.logger.debug("sign_and_send_transaction", tx=tx)
-        return "0x" + tx_hash.hex()
+        self.address = self.w3.to_checksum_address(wallet_address)
+        self.logger.debug("connect_wallet", address=self.address)
+        return self.address
 
     def check_balance(self) -> float:
         """
-        Check the balance of the current account.
+        Check the balance of the current wallet.
 
         Returns:
-            float: Account balance in FLR
+            float: Wallet balance in FLR
 
         Raises:
-            ValueError: If account does not exist
+            ValueError: If wallet is not connected
         """
         if not self.address:
-            msg = "Account does not exist"
+            msg = "Wallet not connected"
             raise ValueError(msg)
         balance_wei = self.w3.eth.get_balance(self.address)
         self.logger.debug("check_balance", balance_wei=balance_wei)
@@ -164,10 +169,10 @@ class FlareProvider:
             TxParams: Transaction parameters for sending FLR
 
         Raises:
-            ValueError: If account does not exist
+            ValueError: If wallet is not connected
         """
         if not self.address:
-            msg = "Account does not exist"
+            msg = "Wallet not connected"
             raise ValueError(msg)
         tx: TxParams = {
             "from": self.address,

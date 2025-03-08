@@ -25,8 +25,10 @@ from flare_ai_defai.prompts.schemas import (
     SemanticRouterResponse,
     TokenSendResponse,
     TokenSwapResponse,
+    WalletConnectResponse,
 )
 from flare_ai_defai.prompts.templates import (
+    CONNECT_WALLET,
     CONVERSATIONAL,
     GENERATE_ACCOUNT,
     REMOTE_ATTESTATION,
@@ -34,6 +36,9 @@ from flare_ai_defai.prompts.templates import (
     TOKEN_SEND,
     TOKEN_SWAP,
     TX_CONFIRMATION,
+    WALLET_CONNECTED,
+    WALLET_CONNECTION_INSTRUCTIONS,
+    WALLET_REQUIRED,
 )
 
 logger = structlog.get_logger(__name__)
@@ -41,34 +46,57 @@ logger = structlog.get_logger(__name__)
 
 class PromptLibrary:
     """
-    A library for managing and organizing AI prompts used in the Flare AI DeFAI.
+    Library for managing and retrieving prompt templates.
 
-    This class serves as a central repository for all prompt templates used in
-    the application. It provides functionality to add, retrieve, and categorize
-    prompts for various operations such as token transactions, account management,
-    and user interactions.
+    This class provides a centralized repository for all prompt templates used
+    in the application. It allows for easy retrieval of prompts by name or category,
+    and ensures consistent prompt formatting across the application.
 
     Attributes:
-        prompts (dict[str, Prompt]): Dictionary storing prompt objects
-            with their names as keys.
-
-    Example:
-        ```python
-        library = PromptLibrary()
-        send_prompt = library.get_prompt("token_send")
-        all_defi_prompts = library.get_prompts_by_category("defai")
-        ```
+        prompts (dict[str, Prompt]): Dictionary of prompt templates indexed by name
+        logger (BoundLogger): Structured logger for the prompt library
     """
 
     def __init__(self) -> None:
         """
-        Initialize a new PromptLibrary instance.
+        Initialize the prompt library with default prompts.
 
-        Creates an empty prompt dictionary and populates it with default prompts
-        through the _initialize_default_prompts method.
+        Creates a new PromptLibrary instance and populates it with a set of
+        default prompt templates for various operations.
         """
         self.prompts: dict[str, Prompt] = {}
+        self.logger = logger.bind(module="prompt_library")
         self._initialize_default_prompts()
+
+    def get_prompt(self, name: str) -> Prompt:
+        """
+        Get a prompt template by name.
+
+        Args:
+            name: Name of the prompt to retrieve
+
+        Returns:
+            Prompt: The requested prompt template
+
+        Raises:
+            KeyError: If the prompt name is not found in the library
+        """
+        if name not in self.prompts:
+            msg = f"Prompt '{name}' not found"
+            raise KeyError(msg)
+        return self.prompts[name]
+
+    def get_prompts_by_category(self, category: str) -> list[Prompt]:
+        """
+        Get all prompts in a specific category.
+
+        Args:
+            category: Category to filter prompts by
+
+        Returns:
+            list[Prompt]: List of prompts in the specified category
+        """
+        return [p for p in self.prompts.values() if p.category == category]
 
     def _initialize_default_prompts(self) -> None:
         """
@@ -78,7 +106,7 @@ class PromptLibrary:
         - semantic_router: For routing user queries
         - token_send: For token transfer operations
         - token_swap: For token swap operations
-        - generate_account: For wallet generation
+        - connect_wallet: For wallet connection
         - conversational: For general user interactions
         - request_attestation: For remote attestation requests
         - tx_confirmation: For transaction confirmation
@@ -114,45 +142,96 @@ class PromptLibrary:
                 category="defai",
             ),
             Prompt(
+                name="connect_wallet",
+                description="Extract wallet address from user input",
+                template=CONNECT_WALLET,
+                required_inputs=["user_input"],
+                response_schema=WalletConnectResponse,
+                response_mime_type="application/json",
+                category="wallet",
+            ),
+            Prompt(
+                name="wallet_connected",
+                description="Generate response for successful wallet connection",
+                template=WALLET_CONNECTED,
+                required_inputs=["address"],
+                response_schema=None,
+                response_mime_type="text/plain",
+                category="wallet",
+            ),
+            Prompt(
+                name="wallet_connection_instructions",
+                description="Generate instructions for connecting a wallet",
+                template=WALLET_CONNECTION_INSTRUCTIONS,
+                required_inputs=[],
+                response_schema=None,
+                response_mime_type="text/plain",
+                category="wallet",
+            ),
+            Prompt(
+                name="wallet_required",
+                description="Generate message explaining wallet requirement",
+                template=WALLET_REQUIRED,
+                required_inputs=[],
+                response_schema=None,
+                response_mime_type="text/plain",
+                category="wallet",
+            ),
+            Prompt(
                 name="generate_account",
-                description="Generate a new account for a user",
+                description="Generate response for account creation",
                 template=GENERATE_ACCOUNT,
                 required_inputs=["address"],
                 response_schema=None,
-                response_mime_type=None,
+                response_mime_type="text/plain",
                 category="account",
-            ),
-            Prompt(
-                name="conversational",
-                description="Converse with a user",
-                template=CONVERSATIONAL,
-                required_inputs=["user_input"],
-                response_schema=None,
-                response_mime_type=None,
-                category="conversational",
             ),
             Prompt(
                 name="request_attestation",
-                description="User has requested a remote attestation",
+                description="Generate attestation request",
                 template=REMOTE_ATTESTATION,
-                required_inputs=None,
+                required_inputs=[],
                 response_schema=None,
-                response_mime_type=None,
-                category="conversational",
+                response_mime_type="text/plain",
+                category="attestation",
             ),
             Prompt(
                 name="tx_confirmation",
-                description="Confirm a user's transaction",
+                description="Generate transaction confirmation",
                 template=TX_CONFIRMATION,
                 required_inputs=["tx_hash", "block_explorer"],
                 response_schema=None,
-                response_mime_type=None,
-                category="account",
+                response_mime_type="text/plain",
+                category="defai",
+            ),
+            Prompt(
+                name="follow_up_token_send",
+                description="Generate follow-up for token send",
+                template=(
+                    "I need more information to process your token transfer. "
+                    "Please specify the recipient address and the amount you want to send."
+                ),
+                required_inputs=[],
+                response_schema=None,
+                response_mime_type="text/plain",
+                category="defai",
+            ),
+            Prompt(
+                name="conversational",
+                description="Generate conversational response",
+                template=CONVERSATIONAL,
+                required_inputs=["user_input"],
+                response_schema=None,
+                response_mime_type="text/plain",
+                category="conversation",
             ),
         ]
 
         for prompt in default_prompts:
-            self.add_prompt(prompt)
+            self.prompts[prompt.name] = prompt
+            self.logger.debug(
+                "added_prompt", name=prompt.name, category=prompt.category
+            )
 
     def add_prompt(self, prompt: Prompt) -> None:
         """
@@ -172,52 +251,6 @@ class PromptLibrary:
         """
         self.prompts[prompt.name] = prompt
         logger.debug("prompt_added", name=prompt.name, category=prompt.category)
-
-    def get_prompt(self, name: str) -> Prompt:
-        """
-        Retrieve a prompt by its name.
-
-        Args:
-            name (str): The name of the prompt to retrieve.
-
-        Returns:
-            Prompt: The requested prompt object.
-
-        Raises:
-            KeyError: If the prompt name doesn't exist in the library.
-
-        Example:
-            ```python
-            try:
-                prompt = library.get_prompt("token_send")
-            except KeyError:
-                print("Prompt not found")
-            ```
-        """
-        if name not in self.prompts:
-            logger.error("prompt_not_found", name=name)
-            msg = f"Prompt '{name}' not found in library"
-            raise KeyError(msg)
-        return self.prompts[name]
-
-    def get_prompts_by_category(self, category: str) -> list[Prompt]:
-        """
-        Get all prompts in a specific category.
-
-        Args:
-            category (str): The category to filter prompts by.
-
-        Returns:
-            list[Prompt]: A list of all prompts in the specified category.
-
-        Example:
-            ```python
-            defi_prompts = library.get_prompts_by_category("defai")
-            ```
-        """
-        return [
-            prompt for prompt in self.prompts.values() if prompt.category == category
-        ]
 
     def list_categories(self) -> list[str]:
         """

@@ -35,9 +35,11 @@ class ChatMessage(BaseModel):
 
     Attributes:
         message (str): The chat message content, must not be empty
+        wallet_address (str, optional): The wallet address if connected
     """
 
     message: str = Field(..., min_length=1)
+    wallet_address: str = Field(None)
 
 
 class ChatRouter:
@@ -103,14 +105,34 @@ class ChatRouter:
             try:
                 self.logger.debug("received_message", message=message.message)
 
+                # Check if message is a command
                 if message.message.startswith("/"):
                     return await self.handle_command(message.message)
+
+                # Connect wallet if address is provided
+                if message.wallet_address and not self.blockchain.address:
+                    try:
+                        self.blockchain.connect_wallet(message.wallet_address)
+                        self.logger.debug(
+                            "wallet_connected", address=message.wallet_address
+                        )
+                    except Exception as e:
+                        self.logger.exception("wallet_connection_failed", error=str(e))
+                        return {"response": f"Failed to connect wallet: {str(e)}"}
+
+                # Handle transaction confirmation
                 if (
                     self.blockchain.tx_queue
                     and message.message == self.blockchain.tx_queue[-1].msg
                 ):
                     try:
-                        tx_hash = self.blockchain.send_tx_in_queue()
+                        tx_data = self.blockchain.send_tx_in_queue()
+
+                        # Check if this is a transaction data response for wallet extension
+                        if tx_data.startswith("tx_data:"):
+                            # Return the transaction data for the wallet extension to handle
+                            return {"response": tx_data}
+
                     except Web3RPCError as e:
                         self.logger.exception("send_tx_failed", error=str(e))
                         msg = (
@@ -120,7 +142,7 @@ class ChatRouter:
 
                     prompt, mime_type, schema = self.prompts.get_formatted_prompt(
                         "tx_confirmation",
-                        tx_hash=tx_hash,
+                        tx_hash=tx_data,
                         block_explorer=settings.web3_explorer_url,
                     )
                     tx_confirmation_response = self.ai.generate(
@@ -201,7 +223,7 @@ class ChatRouter:
             dict[str, str]: Response from the appropriate handler
         """
         handlers = {
-            SemanticRouterResponse.GENERATE_ACCOUNT: self.handle_generate_account,
+            SemanticRouterResponse.CONNECT_WALLET: self.handle_connect_wallet,
             SemanticRouterResponse.SEND_TOKEN: self.handle_send_token,
             SemanticRouterResponse.SWAP_TOKEN: self.handle_swap_token,
             SemanticRouterResponse.REQUEST_ATTESTATION: self.handle_attestation,
@@ -214,27 +236,59 @@ class ChatRouter:
 
         return await handler(message)
 
-    async def handle_generate_account(self, _: str) -> dict[str, str]:
+    async def handle_connect_wallet(self, message: str) -> dict[str, str]:
         """
-        Handle account generation requests.
+        Handle wallet connection requests.
 
         Args:
-            _: Unused message parameter
+            message: Message containing wallet address or connection request
 
         Returns:
-            dict[str, str]: Response containing new account information
-                or existing account
+            dict[str, str]: Response containing wallet connection information
+                or existing wallet
         """
         if self.blockchain.address:
-            return {"response": f"Account exists - {self.blockchain.address}"}
-        address = self.blockchain.generate_account()
+            return {"response": f"Wallet already connected - {self.blockchain.address}"}
+
+        # Extract wallet address from message or prompt user to connect wallet
         prompt, mime_type, schema = self.prompts.get_formatted_prompt(
-            "generate_account", address=address
+            "connect_wallet", user_input=message
         )
-        gen_address_response = self.ai.generate(
+        wallet_response = self.ai.generate(
             prompt=prompt, response_mime_type=mime_type, response_schema=schema
         )
-        return {"response": gen_address_response.text}
+
+        try:
+            wallet_json = json.loads(wallet_response.text)
+            wallet_address = wallet_json.get("wallet_address")
+
+            if wallet_address and wallet_address.startswith("0x"):
+                address = self.blockchain.connect_wallet(wallet_address)
+                prompt, mime_type, schema = self.prompts.get_formatted_prompt(
+                    "wallet_connected", address=address
+                )
+                wallet_connected_response = self.ai.generate(
+                    prompt=prompt, response_mime_type=mime_type, response_schema=schema
+                )
+                return {"response": wallet_connected_response.text}
+            else:
+                # If no valid wallet address was found, return instructions for connecting wallet
+                prompt, mime_type, schema = self.prompts.get_formatted_prompt(
+                    "wallet_connection_instructions"
+                )
+                instructions_response = self.ai.generate(
+                    prompt=prompt, response_mime_type=mime_type, response_schema=schema
+                )
+                return {"response": instructions_response.text}
+        except (json.JSONDecodeError, ValueError):
+            # If there was an error parsing the response, return instructions for connecting wallet
+            prompt, mime_type, schema = self.prompts.get_formatted_prompt(
+                "wallet_connection_instructions"
+            )
+            instructions_response = self.ai.generate(
+                prompt=prompt, response_mime_type=mime_type, response_schema=schema
+            )
+            return {"response": instructions_response.text}
 
     async def handle_send_token(self, message: str) -> dict[str, str]:
         """
@@ -247,7 +301,14 @@ class ChatRouter:
             dict[str, str]: Response containing transaction preview or follow-up prompt
         """
         if not self.blockchain.address:
-            await self.handle_generate_account(message)
+            # Redirect to wallet connection if no wallet is connected
+            prompt, mime_type, schema = self.prompts.get_formatted_prompt(
+                "wallet_required"
+            )
+            wallet_required_response = self.ai.generate(
+                prompt=prompt, response_mime_type=mime_type, response_schema=schema
+            )
+            return {"response": wallet_required_response.text}
 
         prompt, mime_type, schema = self.prompts.get_formatted_prompt(
             "token_send", user_input=message
@@ -288,6 +349,16 @@ class ChatRouter:
         Returns:
             dict[str, str]: Response indicating unsupported operation
         """
+        if not self.blockchain.address:
+            # Redirect to wallet connection if no wallet is connected
+            prompt, mime_type, schema = self.prompts.get_formatted_prompt(
+                "wallet_required"
+            )
+            wallet_required_response = self.ai.generate(
+                prompt=prompt, response_mime_type=mime_type, response_schema=schema
+            )
+            return {"response": wallet_required_response.text}
+
         return {"response": "Sorry I can't do that right now"}
 
     async def handle_attestation(self, _: str) -> dict[str, str]:
