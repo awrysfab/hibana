@@ -10,7 +10,18 @@ from dataclasses import dataclass
 import structlog
 from eth_typing import ChecksumAddress
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+
+# Fix import for geth_poa_middleware
+try:
+    # For newer web3.py versions
+    from web3.middleware.geth import geth_poa_middleware  # type: ignore  # noqa: PGH003
+except ImportError:
+    # For older web3.py versions
+    try:
+        from web3.middleware import geth_poa_middleware
+    except ImportError:
+        # Fallback if middleware is not available
+        geth_poa_middleware = None
 from web3.types import TxParams
 
 
