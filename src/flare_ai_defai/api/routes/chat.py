@@ -82,14 +82,14 @@ class ChatRouter:
         self.logger = logger.bind(router="chat")
         self._setup_routes()
 
-    def _setup_routes(self) -> None:
+    def _setup_routes(self) -> None:  # noqa: C901
         """
         Set up FastAPI routes for the chat endpoint.
         Handles message routing, command processing, and transaction confirmations.
         """
 
         @self._router.post("/")
-        async def chat(message: ChatMessage) -> dict[str, str]:  # pyright: ignore [reportUnusedFunction]
+        async def chat(message: ChatMessage) -> dict[str, str]:  # pyright: ignore [reportUnusedFunction]  # noqa: PLR0911
             """
             Process incoming chat messages and route them to appropriate handlers.
 
@@ -113,18 +113,13 @@ class ChatRouter:
                 if message.wallet_address and not self.blockchain.address:
                     try:
                         self.blockchain.connect_wallet(message.wallet_address)
-                        self.logger.debug(
-                            "wallet_connected", address=message.wallet_address
-                        )
+                        self.logger.debug("wallet_connected", address=message.wallet_address)
                     except Exception as e:
                         self.logger.exception("wallet_connection_failed", error=str(e))
-                        return {"response": f"Failed to connect wallet: {str(e)}"}
+                        return {"response": f"Failed to connect wallet: {e!s}"}
 
                 # Handle transaction confirmation
-                if (
-                    self.blockchain.tx_queue
-                    and message.message == self.blockchain.tx_queue[-1].msg
-                ):
+                if self.blockchain.tx_queue and message.message == self.blockchain.tx_queue[-1].msg:
                     try:
                         tx_data = self.blockchain.send_tx_in_queue()
 
@@ -135,9 +130,7 @@ class ChatRouter:
 
                     except Web3RPCError as e:
                         self.logger.exception("send_tx_failed", error=str(e))
-                        msg = (
-                            f"Unfortunately the tx failed with the error:\n{e.args[0]}"
-                        )
+                        msg = f"Unfortunately the tx failed with the error:\n{e.args[0]}"
                         return {"response": msg}
 
                     prompt, mime_type, schema = self.prompts.get_formatted_prompt(
@@ -209,9 +202,7 @@ class ChatRouter:
             self.logger.exception("routing_failed", error=str(e))
             return SemanticRouterResponse.CONVERSATIONAL
 
-    async def route_message(
-        self, route: SemanticRouterResponse, message: str
-    ) -> dict[str, str]:
+    async def route_message(self, route: SemanticRouterResponse, message: str) -> dict[str, str]:
         """
         Route a message to the appropriate handler based on semantic route.
 
@@ -271,15 +262,15 @@ class ChatRouter:
                     prompt=prompt, response_mime_type=mime_type, response_schema=schema
                 )
                 return {"response": wallet_connected_response.text}
-            else:
-                # If no valid wallet address was found, return instructions for connecting wallet
-                prompt, mime_type, schema = self.prompts.get_formatted_prompt(
-                    "wallet_connection_instructions"
-                )
-                instructions_response = self.ai.generate(
-                    prompt=prompt, response_mime_type=mime_type, response_schema=schema
-                )
-                return {"response": instructions_response.text}
+
+            # If no valid wallet address was found, return instructions for connecting wallet
+            prompt, mime_type, schema = self.prompts.get_formatted_prompt(
+                "wallet_connection_instructions"
+            )
+            instructions_response = self.ai.generate(
+                prompt=prompt, response_mime_type=mime_type, response_schema=schema
+            )
+            return {"response": instructions_response.text}  # noqa: TRY300
         except (json.JSONDecodeError, ValueError):
             # If there was an error parsing the response, return instructions for connecting wallet
             prompt, mime_type, schema = self.prompts.get_formatted_prompt(
@@ -302,9 +293,7 @@ class ChatRouter:
         """
         if not self.blockchain.address:
             # Redirect to wallet connection if no wallet is connected
-            prompt, mime_type, schema = self.prompts.get_formatted_prompt(
-                "wallet_required"
-            )
+            prompt, mime_type, schema = self.prompts.get_formatted_prompt("wallet_required")
             wallet_required_response = self.ai.generate(
                 prompt=prompt, response_mime_type=mime_type, response_schema=schema
             )
@@ -318,10 +307,7 @@ class ChatRouter:
         )
         send_token_json = json.loads(send_token_response.text)
         expected_json_len = 2
-        if (
-            len(send_token_json) != expected_json_len
-            or send_token_json.get("amount") == 0.0
-        ):
+        if len(send_token_json) != expected_json_len or send_token_json.get("amount") == 0.0:
             prompt, _, _ = self.prompts.get_formatted_prompt("follow_up_token_send")
             follow_up_response = self.ai.generate(prompt)
             return {"response": follow_up_response.text}
@@ -351,9 +337,7 @@ class ChatRouter:
         """
         if not self.blockchain.address:
             # Redirect to wallet connection if no wallet is connected
-            prompt, mime_type, schema = self.prompts.get_formatted_prompt(
-                "wallet_required"
-            )
+            prompt, mime_type, schema = self.prompts.get_formatted_prompt("wallet_required")
             wallet_required_response = self.ai.generate(
                 prompt=prompt, response_mime_type=mime_type, response_schema=schema
             )
