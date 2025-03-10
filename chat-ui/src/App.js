@@ -6,7 +6,7 @@ import { WalletProvider } from './contexts/WalletContext';
 import WalletConnector from './components/WalletConnector';
 import { useWallet } from './contexts/WalletContext';
 
-const BACKEND_ROUTE = 'http://localhost:8080/api/routes/chat/'
+const BACKEND_ROUTE = 'api/routes/chat/'
 
 const ChatInterface = () => {
   const [messages, setMessages] = useState([
