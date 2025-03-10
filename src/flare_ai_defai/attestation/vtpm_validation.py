@@ -78,9 +78,7 @@ type JSONWebKeySet = dict[str, list[dict[str, str]]]
 ALGO: Final[str] = "RS256"
 CERT_HASH_ALGO: Final[str] = "sha256"
 CERT_COUNT: Final[int] = 3
-CERT_FINGERPRINT: Final[str] = (
-    "B9:51:20:74:2C:24:E3:AA:34:04:2E:1C:3B:A3:AA:D2:8B:21:23:21"
-)
+CERT_FINGERPRINT: Final[str] = "B9:51:20:74:2C:24:E3:AA:34:04:2E:1C:3B:A3:AA:D2:8B:21:23:21"
 
 
 class VtpmValidation:
@@ -271,9 +269,7 @@ class VtpmValidation:
             raise VtpmValidationError(msg) from e
 
     @staticmethod
-    def _get_well_known_file(
-        expected_issuer: str, well_known_path: str
-    ) -> requests.Response:
+    def _get_well_known_file(expected_issuer: str, well_known_path: str) -> requests.Response:
         """
         Fetch configuration data from a well-known endpoint.
 
@@ -342,9 +338,7 @@ class VtpmValidation:
         e = int.from_bytes(base64.urlsafe_b64decode(jwk["e"] + "=="), "big")
         return rsa.RSAPublicNumbers(e, n).public_key(backend=default_backend())
 
-    def _extract_and_validate_certificates(
-        self, headers: dict[str, Any]
-    ) -> PKICertificates:
+    def _extract_and_validate_certificates(self, headers: dict[str, Any]) -> PKICertificates:
         """
         Extract and validate the certificate chain from the token header.
 
@@ -432,9 +426,7 @@ class VtpmValidation:
         """Compares token root certificate with stored root certificate."""
         try:
             fingerprint1 = hashlib.sha256(root_cert.tbs_certificate_bytes).digest()
-            fingerprint2 = hashlib.sha256(
-                token_root_cert.tbs_certificate_bytes
-            ).digest()
+            fingerprint2 = hashlib.sha256(token_root_cert.tbs_certificate_bytes).digest()
 
             if fingerprint1 != fingerprint2:
                 msg = "Root certificate fingerprint mismatch"
@@ -464,9 +456,7 @@ class VtpmValidation:
             store.add_cert(X509.from_cryptography(certificates.root_cert))
             store.add_cert(X509.from_cryptography(certificates.intermediate_cert))
 
-            store_ctx = X509StoreContext(
-                store, X509.from_cryptography(certificates.leaf_cert)
-            )
+            store_ctx = X509StoreContext(store, X509.from_cryptography(certificates.leaf_cert))
             store_ctx.verify_certificate()
 
         except OpenSSLError as e:
@@ -502,9 +492,7 @@ class VtpmValidation:
                 raise InvalidCertificateChainError(msg)
 
     @staticmethod
-    def _is_certificate_valid(
-        cert: x509.Certificate, current_time: datetime.datetime
-    ) -> bool:
+    def _is_certificate_valid(cert: x509.Certificate, current_time: datetime.datetime) -> bool:
         """
         Check if a certificate is valid at a specific time.
 

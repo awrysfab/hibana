@@ -109,9 +109,7 @@ class PromptService:
             prompt = self.library.get_prompt(prompt_name)
             formatted = prompt.format(**kwargs)
         except Exception as e:
-            self.logger.exception(
-                "prompt_formatting_failed", prompt_name=prompt_name, error=str(e)
-            )
+            self.logger.exception("prompt_formatting_failed", prompt_name=prompt_name, error=str(e))
             raise
         else:
             return (formatted, prompt.response_mime_type, prompt.response_schema)

@@ -229,9 +229,7 @@ class PromptLibrary:
 
         for prompt in default_prompts:
             self.prompts[prompt.name] = prompt
-            self.logger.debug(
-                "added_prompt", name=prompt.name, category=prompt.category
-            )
+            self.logger.debug("added_prompt", name=prompt.name, category=prompt.category)
 
     def add_prompt(self, prompt: Prompt) -> None:
         """
@@ -266,9 +264,5 @@ class PromptLibrary:
             ```
         """
         return list(
-            {
-                prompt.category
-                for prompt in self.prompts.values()
-                if prompt.category is not None
-            }
+            {prompt.category for prompt in self.prompts.values() if prompt.category is not None}
         )

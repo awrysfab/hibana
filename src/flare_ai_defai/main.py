@@ -54,9 +54,7 @@ def create_app() -> FastAPI:
         - web3_provider_url: URL for Web3 provider
         - simulate_attestation: Boolean flag for attestation simulation
     """
-    app = FastAPI(
-        title="AI Agent API", version=settings.api_version, redirect_slashes=False
-    )
+    app = FastAPI(title="AI Agent API", version=settings.api_version, redirect_slashes=False)
 
     # Configure CORS middleware with settings from configuration
     app.add_middleware(

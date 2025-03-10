@@ -19,9 +19,7 @@ class FlareExplorer:
         """
         headers = {"accept": "application/json"}
         try:
-            response = requests.get(
-                self.base_url, params=params, headers=headers, timeout=10
-            )
+            response = requests.get(self.base_url, params=params, headers=headers, timeout=10)
             response.raise_for_status()
             json_response = response.json()
 

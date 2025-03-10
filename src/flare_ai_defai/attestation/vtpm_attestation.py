@@ -127,9 +127,7 @@ class Vtpm:
 
         # Send a POST request
         headers = {"Content-Type": "application/json"}
-        body = json.dumps(
-            {"audience": audience, "token_type": token_type, "nonces": nonces}
-        )
+        body = json.dumps({"audience": audience, "token_type": token_type, "nonces": nonces})
         conn.request("POST", self.url, body=body, headers=headers)
 
         # Get and decode the response

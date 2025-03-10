@@ -116,9 +116,7 @@ class BaseRouter:
         params = params or {}
 
         url = self.base_url + endpoint
-        response = self.session.get(
-            url=url, params=params, headers=self.headers, timeout=30
-        )
+        response = self.session.get(url=url, params=params, headers=self.headers, timeout=30)
 
         success_status = 200
         if response.status_code == success_status:
@@ -140,9 +138,7 @@ class BaseRouter:
         :return: JSON response as a dictionary.
         """
         url = self.base_url + endpoint
-        response = self.session.post(
-            url=url, headers=self.headers, json=json_payload, timeout=30
-        )
+        response = self.session.post(url=url, headers=self.headers, json=json_payload, timeout=30)
 
         success_status = 200
         if response.status_code == success_status:
